@@ -4,12 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LeetCode | Top Rated</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 </head>
 <style>
 body {
     background-color: rgba(0, 0, 0, 0.808);
     margin: 25px;
     font-family: Arial, Helvetica, sans-serif;
+    color: white;
 }
 #questions-table {
   border-collapse: collapse;
@@ -17,6 +19,7 @@ body {
   margin-left: auto;
   margin-right: auto;
   margin-bottom: 50px;
+  width: 85vw;
 }
 
 #questions-table td, #questions-table th {
@@ -49,6 +52,7 @@ a:hover{
 .difficulty-column{
     font-weight: 600;
 }
+
 h3 {
     color: white;
     text-align: center;
@@ -60,43 +64,137 @@ h3 {
     color: rgba(255, 208, 0, 0.76) !important;
 }
 .hard {
-    color: firebrick !important;
+    color: rgb(218, 12, 12) !important;
 }
 .link{
     font-size: 0.8rem !important;
 }
+.filters {
+    padding: 5px;
+    float: right;
+    margin-bottom: 20px;
+}
 </style>
+
 <body>
     <h3>LeetCode Questions (Sorted By Rating)</h3>
     
-    <table id="questions-table">
-        <tr>
-            <th>#</th>
-            <th>ID</th>
-            <th>Title</th>
-            <th>Like/Dislike ratio</th>
-            <th>Difficulty</th>
-            <th>Acceptance %</th>
-            <th>Link</th>
-        </tr>
-    {% for ques in questions %}
-        <tr>
-            <td>{{ loop.index }}</td>
-            <td>{{ ques.q_id }}</td>
-            <td>{{ ques.name }}</td>
-            <td>{{ ques.ratio|round(2, 'floor') }}</td>
-            {% if ques.difficulty == 1 %}
-            <td class="easy difficulty-column">Easy</td>
-            {% elif ques.difficulty == 2 %}
-            <td class="medium difficulty-column">Medium</td>
-            {% else %}
-            <td class="hard difficulty-column">Hard</td>
-            {% endif %}
-            <td>{{ ques.stats['acRate'] }}</td>
-            <td class="link"><a target="_blank" href={{ "https://leetcode.com/problems/" ~ ques.slug ~ "/"}}>{{ "https://leetcode.com/problems/" ~ ques.slug ~ "/"}}</a></td>
-        </tr>
-    {% endfor %}
+    <div class="filters">
+        <p>Filters:</p>
+        <input checked type="checkbox" onclick="updateDifficultyFilter(this)" name="difficulty-filter" value="1" id="easy">
+        <label for="easy" class="easy">Easy</label>
+        <input checked type="checkbox" onclick="updateDifficultyFilter(this)" name="difficulty-filter" value="2" id="medium">
+        <label for="medium" class="medium">Medium</label>
+        <input checked type="checkbox" onclick="updateDifficultyFilter(this)" name="difficulty-filter" value="3" id="hard">
+        <label for="hard" class="hard">Hard</label>
+    </div>
+    <br>
 
-    </table>
+
+    <script>
+        let cnt = -1;
+        let filter = {
+            sortingFilterOrder: "normal",
+            difficultyFilter: {
+                1: true,
+                2: true,
+                3: true,
+            }
+        }
+        let originalListQuestions = []
+        fetch('/results').then((result) => {
+            result.json().then((json_result) => {
+                json_result.forEach(ele => {
+                    originalListQuestions.push(ele)
+                })
+                tableCreate(originalListQuestions)
+            })
+        })
+
+        const updateRatioFilter = () => {
+            cnt++
+            if(cnt%3==0){
+                //decreasing order
+                filter.sortingFilterOrder = "decreasing"
+            }
+            else if(cnt%3==1){
+                //increasing order
+                filter.sortingFilterOrder = "increasing"
+            }
+            else{
+                //normal
+                filter.sortingFilterOrder = "normal"
+            }
+            updateListQuestions()
+        }
+
+        const updateListQuestions = () => {
+            let newListQuestions = []
+            originalListQuestions.forEach(question => {
+                if(filter.difficultyFilter[question.difficulty]){
+                    newListQuestions.push(question)
+                }
+            })
+            if(filter.sortingFilterOrder == "increasing"){
+                newListQuestions.sort(function(first, second){
+                    return first.ratio - second.ratio
+                })
+            }
+            else if(filter.sortingFilterOrder == "decreasing"){
+                newListQuestions.sort(function(first, second){
+                    return second.ratio - first.ratio
+                })
+            }
+            tableCreate(newListQuestions)
+        }
+        const updateDifficultyFilter = (ele) => {
+            let type = ele.value
+            let status = ele.checked
+            filter.difficultyFilter[type] = status ? 1 : 0
+            console.log(filter)
+            updateListQuestions()
+        }
+        const getStringDifficulty = (diffLevel) => {
+            if(diffLevel == 1) return "<td class='easy'>Easy</td>"
+            else if(diffLevel == 2) return "<td class='medium'>Medium</td>"
+            else return "<td class='hard'>Hard</td>"
+        }
+
+        function tableCreate(listOfQuestions){
+            //delete previous table if exists
+            if(document.getElementById('questions-table')){
+                document.getElementById('questions-table').remove()
+            }
+            var body = document.body,
+                tbl  = document.createElement('table')
+            tbl.id = 'questions-table'
+            let tr = tbl.insertRow()
+            tr.innerHTML = `<tr>
+                <th>#</th>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Like/Dislike ratio <button onclick="updateRatioFilter()"><i class="fa fa-sort"></i></button></th>
+                <th>Difficulty</th>
+                <th>Acceptance %</th>
+                <th>Link</th>
+            </tr>`
+            for(let i = 0; i < listOfQuestions.length; i++){
+                let tr = tbl.insertRow()
+                tr.innerHTML = `
+                <td>${i+1}</th>
+                <td>${listOfQuestions[i].q_id}</th>
+                <td>${listOfQuestions[i].name}</th>
+                <td>${parseFloat(listOfQuestions[i].ratio).toFixed(2)}</th>
+                ${getStringDifficulty(listOfQuestions[i].difficulty)}
+                <td>${listOfQuestions[i].stats.acRate}</th>
+                <td class="link"><a target="_blank" href="https://leetcode.com/problems/${listOfQuestions[i].slug}/">
+                    https://leetcode.com/problems/${listOfQuestions[i].slug}/</a></th>
+                `
+            }
+            body.appendChild(tbl)
+        }
+
+    </script>
 </body>
+
 </html>

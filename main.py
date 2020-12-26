@@ -74,23 +74,29 @@ class Question:
     def __str__(self):
         return f'Question {self.q_id}: {self.name} with a ratio of likes/dislikes {self.ratio:.2f}'
 
+saved_questions = []
+def read_saved_results():
+    global saved_questions
+    with open('./saved_results.pkl', 'rb') as f:
+            saved_questions = pickle.load(f)
 
-
-with open('./saved_results.pkl', 'rb') as f:
-        questions = pickle.load(f)
+# @app.route('/')
+# def home():
+#     return 'LeetCode most liked questions'
 
 @app.route('/')
-def home():
-    return 'LeetCode most liked questions'
+def get_most_liked():
+    return render_template('index.html', questions=saved_questions)
 
-@app.route('/most-liked/<int:top_k>')
-def get_most_liked(top_k):
-    return render_template('index.html', questions=questions)
-
+@app.route('/results')
+def get_results():
+    return json.dumps(saved_questions, default=lambda x: x.__dict__)
 
 async def fetch(url, session, variables, query):
     async with session.post(url, json={'query': query, 'variables': variables}) as response:
-        return await response.read()
+        result = await response.read()
+        return (result, variables['titleSlug']) #will use titleSlug for mapping back to questions in proper order
+
 
 async def run(query_string, list_variables, url):
     tasks = []
@@ -120,7 +126,8 @@ def save_most_liked(top_k=-1):
 
     json_response = response.json()
     list_of_questions = json_response['stat_status_pairs']
-    questions = []
+
+    map_slug_to_question_info = {}
     if top_k == -1:
         top_k = len(list_of_questions)
     
@@ -131,14 +138,19 @@ def save_most_liked(top_k=-1):
         if question['paid_only']:
             print(f"Skipping paid only question {stat_info['question_id']}...")
             continue
-        list_variables.append({"titleSlug": stat_info['question__title_slug']})
+        title_slug = stat_info['question__title_slug']
+        map_slug_to_question_info[title_slug] = question
+        list_variables.append({"titleSlug": title_slug})
     
     loop = asyncio.get_event_loop()
     future = asyncio.ensure_future(run(query_string, list_variables, API_URLS['question_info']))
-    responses = map(json.loads, loop.run_until_complete(future))
+    responses = map(lambda x: (json.loads(x[0]), x[1]), loop.run_until_complete(future))
 
+    questions = []
 
-    for response, question in zip(responses, list_of_questions):
+    #NOTE: careful here! responses are obviously not in the same order as they were async evaluated
+    for response, title_slug in responses:
+        question = map_slug_to_question_info[title_slug]
         difficulty_info = question['difficulty']
         stat_info = question['stat']
         result = response['data']['question']
@@ -155,13 +167,16 @@ def save_most_liked(top_k=-1):
 
     for q in questions:
         print(q)
-        if q == None:
-            print("BAD")
+        print(q.slug)
 
     print("Saving to file...")
     with open('./saved_results.pkl', 'wb') as f:
         pickle.dump(questions, f)
     print('=' * 50)
+
+
+    global saved_questions
+    read_saved_results() #update the global variable questions
 
 
 
@@ -174,8 +189,8 @@ scheduler.start()
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown()) #close on shutdown
 
-# save_most_liked(-1) #call this for fetching all questions
-
+# save_most_liked() #call this for fetching all questions
 
 if __name__ == '__main__':
+    read_saved_results()
     app.run(port=1337)
