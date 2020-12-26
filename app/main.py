@@ -10,6 +10,8 @@ import json
 from math import sqrt
 import asyncio
 from aiohttp import ClientSession
+import sys
+import logging
 
 
 with open('./query_string.txt') as f:
@@ -19,6 +21,7 @@ with open('./query_string.txt') as f:
 
 app = Flask(__name__)
 
+app.config['DEBUG'] = True
 
 API_URLS = {
     'questions_list': "https://leetcode.com/api/problems/algorithms/",
@@ -26,7 +29,7 @@ API_URLS = {
 }
 
 def print_date_time():
-    print(time.strftime("%A, %d. %B %Y %I:%M:%S %p"))
+    app.logger.debug(time.strftime("%A, %d. %B %Y %I:%M:%S %p"))
 
 def make_query(query, variables, url):
     """
@@ -86,6 +89,11 @@ def read_saved_results():
 
 @app.route('/')
 def get_most_liked():
+    app.logger.debug('this is a DEBUG message')
+    app.logger.info('this is an INFO message')
+    app.logger.warning('this is a WARNING message')
+    app.logger.error('this is an ERROR message')
+    app.logger.critical('this is a CRITICAL message')
     return render_template('index.html', questions=saved_questions)
 
 @app.route('/results')
@@ -111,18 +119,19 @@ async def run(query_string, list_variables, url):
 
         responses = await asyncio.gather(*tasks)
         # you now have all response bodies in this variable
-        # print(responses[-1])
+        # app.logger.debug(responses[-1])
         return responses
 
 def save_most_liked(top_k=-1):
-    print('=' * 50)
-    print("Starting a new fetch cycle for updating stored results...")
+    app.logger.debug('=' * 50)
+    app.logger.debug("Starting a new fetch cycle for updating stored results...")
     print_date_time()
+
 
     response = requests.get(API_URLS['questions_list'])
 
     if not response.ok:
-        print('Some error occured')
+        app.logger.debug('Some error occured')
 
     json_response = response.json()
     list_of_questions = json_response['stat_status_pairs']
@@ -136,12 +145,13 @@ def save_most_liked(top_k=-1):
     for question in list_of_questions[:top_k]:
         stat_info = question['stat']
         if question['paid_only']:
-            print(f"Skipping paid only question {stat_info['question_id']}...")
+            app.logger.debug(f"Skipping paid only question {stat_info['question_id']}...")
             continue
         title_slug = stat_info['question__title_slug']
         map_slug_to_question_info[title_slug] = question
         list_variables.append({"titleSlug": title_slug})
     
+
     loop = asyncio.get_event_loop()
     future = asyncio.ensure_future(run(query_string, list_variables, API_URLS['question_info']))
     responses = map(lambda x: (json.loads(x[0]), x[1]), loop.run_until_complete(future))
@@ -160,19 +170,21 @@ def save_most_liked(top_k=-1):
         questions.append(q)
 
 
-    print(f"Got {len(questions)} questions...")
-    print("Sorting...")
+    app.logger.debug(f"Got {len(questions)} questions...")
+    app.logger.debug("Sorting...")
     questions.sort(reverse=True)
-    print("Printing fetched questions...")
+    app.logger.debug("app.logger.debuging fetched questions...")
+
 
     for q in questions:
-        print(q)
-        print(q.slug)
+        app.logger.debug(q)
+        app.logger.debug(q.slug)
 
-    print("Saving to file...")
+
+    app.logger.debug("Saving to file...")
     with open('./saved_results.pkl', 'wb') as f:
         pickle.dump(questions, f)
-    print('=' * 50)
+    app.logger.debug('=' * 50)
 
 
     global saved_questions
@@ -189,9 +201,12 @@ scheduler.start()
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown()) #close on shutdown
 
-read_saved_results()
 # save_most_liked() #call this for fetching all questions
 
-# if __name__ == '__main__':
-#     read_saved_results()
-#     app.run(port=1337)
+if __name__ == '__main__':
+    read_saved_results()
+    app.run(port=1337)
+else:
+    save_most_liked(-1)
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    app.logger.handlers = gunicorn_logger.handlers
