@@ -189,8 +189,9 @@ scheduler.start()
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown()) #close on shutdown
 
+read_saved_results()
 # save_most_liked() #call this for fetching all questions
 
-if __name__ == '__main__':
-    read_saved_results()
-    app.run(port=1337)
+# if __name__ == '__main__':
+#     read_saved_results()
+#     app.run(port=1337)
